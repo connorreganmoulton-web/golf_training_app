@@ -275,13 +275,57 @@ export function buildPlan(rounds: RoundSummary[]): PlanResult {
     threePuttsPer9: "three putts",
   };
 
+  // A category can be as far from target as the last one that got a slot and
+  // still miss out, because slice(0, 2) has to break the tie somehow (#35).
+  // Say so without naming the mechanism — a tie the last bit disagrees about
+  // is broken by the float, not by declaration order, so the payload says
+  // only what is true either way: nothing in the numbers separates them. Name
+  // every category in the tie including
+  // the ones that won it — when three are level, both slots were arbitrary,
+  // and disclosing only the loser leaves the winners reading as earned.
+  // Tied means indistinguishable, not bit-identical: the same six numbers
+  // added in a different order differ in the last bit, and a user equally bad
+  // at two things is not served by that deciding which one gets practised.
+  const cut = worst[worst.length - 1];
+  const tiedGroup = deficits.filter((d) => Math.abs(d.gap - cut.gap) < 1e-9);
+  const leftOut = tiedGroup.filter((d) => !worst.includes(d));
+  // Only the tied winners, not every boosted category: worst[0] can be miles
+  // clear of the tie, and saying the loser is level with it would be the same
+  // fabrication as the superlative this replaced, pointing the other way.
+  const tiedWinners = tiedGroup.filter((d) => worst.includes(d));
+  const listNames = (ds: Deficit[]) => {
+    const n = ds.map((d) => `your ${LABELS[d.key]}`);
+    return n.length > 1 ? `${n.slice(0, -1).join(", ")} and ${n[n.length - 1]}` : n[0];
+  };
+
   const out = blocks.map((b) => {
     if (boosted.has(b.block.id)) {
-      const cause = worst.find((d) => REMEDIES[d.key].includes(b.block.id))!;
+      // A block can answer both deficits. The rank inside `worst` is not
+      // claimable: gaps are float averages, so two categories the user is
+      // equally bad at differ in the last bit as often as they compare equal,
+      // and sort() then orders them by the declaration order of `deficits`.
+      // Name the categories, claim no ordering between them. (That the plan
+      // boosts only two when a third is equally far is #35, not a copy fix.)
+      const causes = worst.filter((d) => REMEDIES[d.key].includes(b.block.id));
+      // " and your " not " and ": "your doubles or worse and penalty strokes"
+      // garden-paths on the first label.
+      const names = causes.map((d) => LABELS[d.key]).join(" and your ");
       return {
         ...b,
         slots: b.slots + 1,
-        reason: `Your ${LABELS[cause.key]} is the furthest from target`,
+        reason:
+          worst.length === 1
+            ? `Your ${names} are the furthest from target`
+            : `Your ${names} are among the furthest from target`,
+      };
+    }
+    // The tie's losers keep their baseline slots, but "Baseline allocation"
+    // alone is what an untouched category says, and theirs was touched.
+    const level = leftOut.filter((d) => REMEDIES[d.key].includes(b.block.id));
+    if (level.length) {
+      return {
+        ...b,
+        reason: `Baseline allocation — ${listNames(level)} are level with ${listNames(tiedWinners)}, which got the extra time this week`,
       };
     }
     return b;
@@ -290,8 +334,19 @@ export function buildPlan(rounds: RoundSummary[]): PlanResult {
   return {
     blocks: out,
     personalized: true,
-    rationale: `Built from your last ${recent.length} rounds. Worst category is ${LABELS[worst[0].key]}${worst[1] ? `, then ${LABELS[worst[1].key]}` : ""}. The blocks that address those got an extra slot this week.`,
+    rationale: `Built from your last ${recent.length} rounds. ${
+      worst.length > 1
+        ? `Your ${LABELS[worst[0].key]} and your ${LABELS[worst[1].key]} are among the furthest from target`
+        : `Your ${LABELS[worst[0].key]} are the furthest from target`
+    }, so the blocks that address them got an extra slot this week.`,
     caveats: [
+      ...(leftOut.length
+        ? [
+            `${listNames(tiedGroup).replace(/^y/, "Y")} are the same distance from target, to within a rounding error. The plan boosts two categories, so it gave the extra time to ${listNames(
+              tiedWinners,
+            )} — nothing in these numbers separates them.`,
+          ]
+        : []),
       "Nine-hole samples are small. One blow-up hole can move a category for weeks.",
       "This reweights practice time. It cannot tell you whether a category moved because you improved or because the course was easier.",
     ],
