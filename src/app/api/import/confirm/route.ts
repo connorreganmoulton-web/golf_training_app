@@ -33,18 +33,22 @@ export async function POST(req: Request) {
 
     // Re-importing the same export is a no-op. A double-clicked upload that
     // duplicated a session would quietly bend every trend built on it.
-    const existing = await prisma.importBatch.findUnique({
-      where: { userId_checksum: { userId, checksum } },
-      include: { sessions: { select: { id: true } } },
-    });
-    if (existing) {
+    const alreadyImported = async () => {
+      const existing = await prisma.importBatch.findUnique({
+        where: { userId_checksum: { userId, checksum } },
+        include: { sessions: { select: { id: true } } },
+      });
+      if (!existing) return null;
       return Response.json({
         duplicate: true,
         batchId: existing.id,
         sessionId: existing.sessions[0]?.id ?? null,
         message: "Already imported — nothing was saved a second time.",
       });
-    }
+    };
+
+    const seen = await alreadyImported();
+    if (seen) return seen;
 
     // Derived numbers are computed from the shots the user kept, so excluding
     // a shank actually moves the block's score.
@@ -60,39 +64,52 @@ export async function POST(req: Request) {
     // whichever side of UTC the user lives.
     const occurredAt = new Date(`${session.date}T12:00:00`);
 
-    const batch = await prisma.importBatch.create({
-      data: {
-        userId,
-        adapter: adapter.id,
-        filename,
-        checksum,
-        rowCount: session.shots.length,
-        sessions: {
-          create: {
-            userId,
-            occurredAt,
-            blockId,
-            minutes: Number.isFinite(minutes) && minutes > 0 ? Math.round(minutes) : null,
-            notes,
-            source: adapter.id,
-            shots: {
-              create: session.shots.map((s, i) => ({ ...s, excluded: excluded.has(i) })),
+    try {
+      const batch = await prisma.importBatch.create({
+        data: {
+          userId,
+          adapter: adapter.id,
+          filename,
+          checksum,
+          rowCount: session.shots.length,
+          sessions: {
+            create: {
+              userId,
+              occurredAt,
+              blockId,
+              minutes: Number.isFinite(minutes) && minutes > 0 ? Math.round(minutes) : null,
+              notes,
+              source: adapter.id,
+              shots: {
+                create: session.shots.map((s, i) => ({ ...s, excluded: excluded.has(i) })),
+              },
+              metrics: { create: metrics },
             },
-            metrics: { create: metrics },
           },
         },
-      },
-      include: { sessions: { select: { id: true } } },
-    });
+        include: { sessions: { select: { id: true } } },
+      });
 
-    return Response.json({
-      duplicate: false,
-      batchId: batch.id,
-      sessionId: batch.sessions[0].id,
-      saved: session.shots.length,
-      excluded: excluded.size,
-      blockId,
-    });
+      return Response.json({
+        duplicate: false,
+        batchId: batch.id,
+        sessionId: batch.sessions[0].id,
+        saved: session.shots.length,
+        excluded: excluded.size,
+        blockId,
+      });
+    } catch (e) {
+      // Two confirms in flight both clear the read above; the loser's insert
+      // trips @@unique([userId, checksum]) and rolls back. Nothing duplicated,
+      // so say so — telling the user their file is broken is what sends them
+      // back to re-export it, and a re-export has a new checksum this guard
+      // can't catch.
+      // ponytail: re-read rather than matching P2002 — on SQLite the same race
+      // can surface as a busy/timeout code instead.
+      const raced = await alreadyImported();
+      if (raced) return raced;
+      throw e;
+    }
   } catch (e) {
     return uploadErrorResponse(e);
   }
