@@ -66,6 +66,13 @@ Each must show the fix **executes** — not that the diff reads correctly:
 
 For an error-path fix, they trigger the genuine error. A mock written to satisfy the assertion proves the mock works.
 
+**Give each adversary its own copy of the tree.** They instrument the code to
+prove the path executes — temporary probes, swapped-in old files, `git
+checkout` to revert. Two of them in one worktree overwrite each other's edits
+mid-experiment and report the collision as an unknown process tampering with
+the checkout, which is both alarming and unfalsifiable. Tell each one to work
+in its own scratch copy, and say in the prompt that the other exists.
+
 Both must clear it. One refusal sends the work back to step 3.
 
 ## 6. Merge
