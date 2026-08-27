@@ -115,6 +115,20 @@ must not overstate what the data supports.
 - Excluded shots are flagged, not deleted, so the raw import stays intact.
 - `ImportBatch.checksum` makes re-importing the same file a no-op. Duplicate
   sessions from a double-click corrupt every trend downstream.
+- **A uniqueness guard has to survive being raced.** Every read-then-write
+  duplicate check in this codebase can be entered twice at once; the loser's
+  insert trips the constraint and the request must still answer honestly.
+  Recover by re-reading the row and returning the ordinary "already there"
+  response — not by matching the driver's error code. SQLite surfaces the same
+  race as a busy/timeout as readily as `P2002`, so an error-code match is a
+  narrower fix that looks complete. `api/import/confirm` does this.
+  `currentUserId()` (`src/lib/db.ts`) reads as having the same shape, but 8
+  concurrent cold-start requests never reproduced it — Prisma may be emitting a
+  native upsert there. Unverified either way; don't cite it as a known bug.
+- **Never tell the user a file is broken when it isn't.** A false import error
+  is not cosmetic: the user re-exports from the launch monitor to "fix" it, the
+  new bytes hash differently, and the checksum guard is defeated on the retry.
+  The lie is what produces the duplicate the guard exists to prevent.
 - `PracticeSession.blockId` is derived from the date (the plan says what a given
   weekday is for) and is **always** user-overridable. Never infer the block from
   which clubs appear in the file — a person hitting 7 irons on a putting day is
@@ -141,6 +155,28 @@ summarized in `docs/BENCHMARKS.md`. The short version:
 adapter, get a genuine export from that device — hand-written CSVs miss the
 quirks that break parsers, like Rapsodo repeating its header for every club
 block and appending Average / Std. Dev. rows that look like shots.
+
+### Route handlers
+
+**A green `npm test` says nothing about `src/app/api/`.** Most of the suite is
+pure functions. For anything under that path, `npx tsc --noEmit` and
+`npm run build` are the gates that matter, and CI runs the docker build too.
+
+`tests/import-confirm.test.ts` is the template when a route needs real
+coverage: point `DATABASE_URL` at a temp SQLite file, run `prisma migrate
+deploy`, import the route *after* that (the client is constructed at import),
+and call the exported `POST` with a real `Request`. Concurrency bugs live in
+the database's constraints, so a mocked Prisma client would only prove the mock
+works. Seed the `User` row directly so a concurrent test is pointed at the
+race it is actually about, not at `currentUserId()`'s upsert.
+
+Two gotchas that cost real time:
+
+- **Vitest swallows `console.*` on passing tests.** A probe that prints nothing
+  has not proven the code didn't run. Use `process.stderr.write`.
+- Prove an error path by observing it execute — a counter on the real client, a
+  stderr probe, a test that fails on the old code. A diff that reads correctly
+  is not evidence.
 
 ## Things deliberately not built
 

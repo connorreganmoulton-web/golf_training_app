@@ -13,5 +13,8 @@ coverage/
 # `tsc --noEmit` run in CI without a Next build first.
 *.tsbuildinfo
 
-# Local agent/editor state, not project code.
-.claude/
+# Local agent/editor state, not project code. Ignore the contents rather than
+# the directory itself, so the negation below can re-include one subtree --
+# git will not descend into a directory it has already excluded.
+.claude/*
+!.claude/skills/
