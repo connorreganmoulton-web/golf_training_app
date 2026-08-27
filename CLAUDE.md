@@ -27,6 +27,29 @@ base.
    claim, the UI says so plainly. See "Honesty rules" below.
 4. **The user's data is theirs.** Export must always work. No lock-in.
 
+## Reporting to the owner
+
+The owner cares about outcomes, not implementation. He does not read the code
+and does not want to arbitrate it.
+
+**If you notice a bug or a problem, open a GitHub issue. Do not describe it in
+chat and ask what he wants done.** A finding raised in conversation dies in the
+scrollback; a finding filed as an issue is work the `/land` skill can pick up.
+That is the whole point of the issue tracker.
+
+This holds even when the finding is small, even when you are mid-task on
+something else, and even when you are fairly sure he would say "don't bother" —
+file it and let it be triaged. Filing is cheap and closing is cheap. Asking
+costs him a decision he did not want to make.
+
+What still belongs in chat: the outcome, what changed for a user of the app,
+and anything genuinely blocked on a decision only he can make. Not the
+reasoning, not the alternatives you rejected, not a walkthrough of the diff.
+Keep it short.
+
+Choices about config, tooling, dependencies, file layout, and test strategy are
+yours. Make them and move on.
+
 ## Stack and why
 
 - **Next.js (App Router), TypeScript** — one process serves UI and API, so
