@@ -1,0 +1,27 @@
+# The build context is copied wholesale by `COPY . .`. Docker does not read
+# .gitignore, so without this the image layers would carry your .env secrets
+# and your SQLite round history — permanently, even if a later layer deletes
+# them.
+.env
+.env.*
+!.env.example
+data/
+prisma/data/
+*.db
+*.db-journal
+
+node_modules/
+.next/
+out/
+coverage/
+
+.git/
+.github/
+.gitignore
+.DS_Store
+
+README.md
+CLAUDE.md
+LICENSE
+docs/
+tests/

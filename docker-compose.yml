@@ -1,0 +1,15 @@
+# Local use: `docker compose up` and open http://localhost:3000
+#
+# That's the whole setup. No database container, no accounts, no config.
+# SQLite lives in the ./data volume next to this file.
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "file:/app/data/golf_training.db"
+      SINGLE_USER: "true"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

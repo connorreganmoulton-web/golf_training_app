@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+data/
+*.db
+*.db-journal
+.env
+.env.local
+.DS_Store
+coverage/
+
+# Build caches. next-env.d.ts IS committed on purpose: it's what lets
+# `tsc --noEmit` run in CI without a Next build first.
+*.tsbuildinfo
+
+# Local agent/editor state, not project code.
+.claude/

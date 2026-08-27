@@ -1,0 +1,37 @@
+# Hosting it for other people:
+#   docker compose -f docker-compose.hosted.yml up
+#
+# Adds Postgres and turns on real logins. Before using this, change the
+# provider in prisma/schema.prisma from "sqlite" to "postgresql" and
+# regenerate migrations. That is the only code change required.
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "postgresql://golf:${POSTGRES_PASSWORD}@db:5432/golf_training"
+      SINGLE_USER: "false"
+      AUTH_SECRET: "${AUTH_SECRET}"
+      AUTH_URL: "${AUTH_URL}"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: golf
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: golf_training
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U golf"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:

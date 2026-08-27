@@ -1,0 +1,219 @@
+// MyTurnGolf data model.
+//
+// SQLite by default so a person can run this with zero setup. Everything here
+// is deliberately Postgres-compatible: no SQLite-only types, no raw SQL,
+// explicit indexes. Switching to hosted multi-user means changing `provider`
+// below to "postgresql", updating DATABASE_URL, and re-running migrations.
+// Nothing in application code should need to change.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- users
+
+model User {
+  id            String    @id @default(cuid())
+  email         String?   @unique
+  name          String?
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+
+  // Golfer profile
+  homePar       Int       @default(36) // par for the nine they usually play
+  handicap      Float?
+
+  accounts Account[]
+  sessions Session[]
+  rounds   Round[]
+  practice PracticeSession[]
+  imports  ImportBatch[]
+  goals    Goal[]
+}
+
+// Auth.js tables. Unused when SINGLE_USER=true but present so enabling
+// hosted mode is a config change, not a migration.
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------- rounds
+
+model Round {
+  id        String   @id @default(cuid())
+  userId    String
+  playedAt  DateTime
+  course    String?
+  holes     Int      @default(9)
+  par       Int      @default(36)
+
+  score       Int
+  gir         Int?
+  fairways    Int?
+  penalties   Int?
+  doubles     Int?
+  threePutts  Int?
+  putts       Int?
+
+  notes     String?
+  source    String   @default("manual") // manual | import:<adapter>
+  createdAt DateTime @default(now())
+
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shots RoundShot[]
+
+  @@index([userId, playedAt])
+}
+
+// Optional per-shot detail. Present so strokes gained can be computed
+// properly if a user ever has shot-level round data; the app works fine
+// without any rows here.
+model RoundShot {
+  id       String @id @default(cuid())
+  roundId  String
+  hole     Int
+  shotNo   Int
+  lie      String // tee | fairway | rough | sand | recovery | green
+  distance Float  // distance to hole BEFORE the shot, in yards
+  club     String?
+  penalty  Boolean @default(false)
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@index([roundId, hole])
+}
+
+// ------------------------------------------------------- practice + shots
+
+model PracticeSession {
+  id         String   @id @default(cuid())
+  userId     String
+  occurredAt DateTime
+  // Which block of the weekly plan this counts as. Derived from the date
+  // by default, always overridable by the user — never guessed from clubs.
+  blockId    String?
+  minutes    Int?
+  notes      String?
+  source     String   @default("manual") // manual | rapsodo | trackman | ...
+  createdAt  DateTime @default(now())
+
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shots   Shot[]
+  metrics Metric[]
+  batch   ImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  batchId String?
+
+  @@index([userId, occurredAt])
+}
+
+// One row per struck ball. This is the thing the artifact could not do:
+// session averages hide everything interesting.
+model Shot {
+  id         String @id @default(cuid())
+  sessionId  String
+  club       String // normalized: "7i", "pw", "d"
+  clubBrand  String?
+  clubModel  String?
+
+  carry        Float?
+  total        Float?
+  ballSpeed    Float?
+  clubSpeed    Float?
+  smashFactor  Float?
+  launchAngle  Float?
+  launchDir    Float?
+  apex         Float?
+  sideCarry    Float?
+  descentAngle Float?
+  attackAngle  Float?
+  clubPath     Float?
+  spinRate     Float?
+  spinAxis     Float?
+
+  // User-flagged mishits get excluded from spread/dispersion math instead of
+  // being deleted, so the raw session stays intact.
+  excluded Boolean @default(false)
+
+  session PracticeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, club])
+}
+
+// Derived or hand-entered numbers a practice block is scored on
+// (7i carry spread, towel hits, putts made in a row).
+model Metric {
+  id        String  @id @default(cuid())
+  sessionId String
+  key       String  // carrySpread | ballSpeedMax | towelHits | puttStreak ...
+  value     Float
+  unit      String?
+  derived   Boolean @default(false) // true = computed from shots, not typed
+
+  session PracticeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, key])
+}
+
+model ImportBatch {
+  id        String   @id @default(cuid())
+  userId    String
+  adapter   String   // rapsodo-mlm2pro | trackman | flightscope | ...
+  filename  String?
+  // Hash of file contents. Re-importing the same file is a no-op instead of
+  // silently duplicating a session.
+  checksum  String
+  rowCount  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions PracticeSession[]
+
+  @@unique([userId, checksum])
+  @@index([userId, createdAt])
+}
+
+model Goal {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String // scorePer9 | girPer9 | penaltiesPer9 ...
+  target    Float
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

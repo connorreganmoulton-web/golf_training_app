@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # The Prisma client is generated, not committed, so types don't exist
+      # until this runs.
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npm test
+
+  docker:
+    # The README's headline instruction is `docker compose up`. Build it on
+    # every PR so it can't quietly break again.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t golf-training-app .
+      - name: Boot it and check it serves
+        run: |
+          docker run -d --name app -p 3000:3000 \
+            -e DATABASE_URL="file:/app/data/golf_training.db" \
+            -e SINGLE_USER=true golf-training-app
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3000/api/plan && exit 0
+            sleep 2
+          done
+          echo "app did not come up"; docker logs app; exit 1

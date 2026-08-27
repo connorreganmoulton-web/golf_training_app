@@ -1,0 +1,43 @@
+{
+  "name": "golf_training_app",
+  "version": "0.1.0",
+  "private": false,
+  "license": "MIT",
+  "description": "A free, self-hostable golf improvement tracker. Import launch monitor data, log rounds, get a practice plan built from your own numbers.",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/connorreganmoulton-web/golf_training_app.git"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:studio": "prisma studio",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "next": "^15.0.0",
+    "next-auth": "^5.0.0-beta.25",
+    "papaparse": "^5.7.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.13.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "@types/papaparse": "^5.5.2",
+    "@types/react": "^18.3.0",
+    "prisma": "^5.22.0",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  }
+}
