@@ -10,6 +10,17 @@ updates:
       minor-and-patch:
         patterns: ["*"]
         update-types: [minor, patch]
+
+      # Exception to "majors arrive one at a time": these packages carry peer
+      # dependencies on each other and are uninstallable apart. Splitting the
+      # React 19 bump produced #13 and #15, neither of which could ever pass
+      # npm ci -- each proposed a v19 runtime against a v18 renderer.
+      react-major:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
+        update-types: [major]
+      prisma-major:
+        patterns: ["prisma", "@prisma/client"]
+        update-types: [major]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
