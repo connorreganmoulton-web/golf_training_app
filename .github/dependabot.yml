@@ -4,8 +4,15 @@ updates:
     directory: /
     schedule: { interval: weekly }
     groups:
-      # One PR a week instead of nine.
-      all-deps: { patterns: ["*"] }
+      # Safe bumps ride together in one PR. Majors are deliberately NOT
+      # grouped: one breaking package (Prisma 5->7) blocked an entire batch
+      # of security fixes, so majors now arrive one at a time.
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    groups:
+      actions:
+        patterns: ["*"]
