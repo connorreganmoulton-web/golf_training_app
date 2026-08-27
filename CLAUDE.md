@@ -158,6 +158,11 @@ block and appending Average / Std. Dev. rows that look like shots.
 Issues live in GitHub Issues on `connorreganmoulton-web/golf_training_app`, via
 the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
+### Triage labels
+
+The five canonical triage roles, each label string equal to its name. See
+`docs/agents/triage-labels.md`.
+
 ### Domain docs
 
 Single-context: one `CONTEXT.md` at the root and ADRs under `docs/adr/`,
