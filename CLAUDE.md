@@ -150,3 +150,15 @@ block and appending Average / Std. Dev. rows that look like shots.
 - **Green reading, course GPS.** Needs licensed course mapping data. Out of
   scope for a free product.
 - **Social features.** No.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues on `connorreganmoulton-web/golf_training_app`, via
+the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` at the root and ADRs under `docs/adr/`,
+both created lazily rather than upfront. See `docs/agents/domain.md`.
