@@ -69,6 +69,34 @@ const TARGETS = {
   threePuttsPer9: 1.0,
 };
 
+/**
+ * What one unit off target costs, in strokes per nine.
+ *
+ * Until #40 a category's score was its deficit divided by its own target,
+ * which made the score depend on how small that target happened to be. Greens
+ * hit is the only higher-is-better metric and the only target that isn't 1.0,
+ * so its deficit was capped at 1.0 no matter how badly a player struck the
+ * ball, while a category one unit over its own target already scored 1.0 and
+ * anything worse beat approach outright. Strokes are the unit
+ * docs/BENCHMARKS.md is denominated in, and they are the thing the four
+ * categories actually share.
+ *
+ * These are approximations, and deliberately coarse ones. They rank
+ * categories against each other; they are not strokes gained and must never be
+ * shown to the user as a number.
+ */
+const STROKE_COST: Record<keyof typeof TARGETS, number> = {
+  girPer9: 0.75,
+  penaltiesPer9: 1.0,
+  doublesPer9: 2.0,
+  threePuttsPer9: 1.0,
+};
+
+/**
+ * Below this, a six-round sample cannot tell a weakness from a bad Wednesday.
+ */
+const NOISE = 0.25;
+
 export const BLOCKS: Block[] = [
   {
     id: "debrief",
@@ -211,10 +239,11 @@ export const BLOCKS: Block[] = [
 ];
 
 /**
- * Two categories can sit exactly as far from target as each other — every
- * target here is 1.0, so equal averages give bit-identical gaps. Something has
- * to break that, and until #35 it was the order the four lines below happen to
- * be written in. Deliberate order, written down where it can be argued with:
+ * Two categories can cost exactly the same number of strokes — a penalty per
+ * nine and a three-putt per nine are both worth one, so equal averages give
+ * bit-identical gaps. Something has to break that, and until #35 it was the
+ * order the four lines below happen to be written in. Deliberate order,
+ * written down where it can be argued with:
  *
  *   Approach first and putting last are what docs/BENCHMARKS.md measures —
  *   roughly 6 strokes of separation on approach against about 1.4 on putting.
@@ -268,23 +297,25 @@ export function buildPlan(rounds: RoundSummary[]): PlanResult {
   const avg = (k: keyof RoundSummary) =>
     recent.reduce((a, r) => a + r[k], 0) / recent.length;
 
-  // Score each category by how far it sits from target, normalized so the
-  // categories are comparable to each other.
+  // Score each category by what its distance from target costs, in strokes per
+  // nine, so the four are measured in the same unit and are comparable.
   type Deficit = { key: keyof typeof TARGETS; gap: number };
   const deficits: Deficit[] = ([
-    { key: "girPer9", gap: (TARGETS.girPer9 - avg("girPer9")) / TARGETS.girPer9 },
-    { key: "penaltiesPer9", gap: (avg("penaltiesPer9") - TARGETS.penaltiesPer9) / TARGETS.penaltiesPer9 },
-    { key: "doublesPer9", gap: (avg("doublesPer9") - TARGETS.doublesPer9) / TARGETS.doublesPer9 },
-    { key: "threePuttsPer9", gap: (avg("threePuttsPer9") - TARGETS.threePuttsPer9) / TARGETS.threePuttsPer9 },
+    { key: "girPer9", gap: (TARGETS.girPer9 - avg("girPer9")) * STROKE_COST.girPer9 },
+    { key: "penaltiesPer9", gap: (avg("penaltiesPer9") - TARGETS.penaltiesPer9) * STROKE_COST.penaltiesPer9 },
+    { key: "doublesPer9", gap: (avg("doublesPer9") - TARGETS.doublesPer9) * STROKE_COST.doublesPer9 },
+    { key: "threePuttsPer9", gap: (avg("threePuttsPer9") - TARGETS.threePuttsPer9) * STROKE_COST.threePuttsPer9 },
   ] as Deficit[])
-    .filter((d) => d.gap > 0.15)
+    .filter((d) => d.gap > NOISE)
     // ponytail: the epsilon check is pairwise, so three gaps straddling TIE
-    // (a≈b, b≈c, a≉c) would make this comparator intransitive. Gaps are ratios
-    // of integer counts over 6 to 8 rounds: across 400k generated round sets
-    // the smallest non-zero separation between two categories was 0.0089, seven
-    // orders of magnitude clear of TIE, and nothing landed in the band at all.
-    // Group the runs explicitly if a fifth category or a coarser TIE changes
-    // that.
+    // (a≈b, b≈c, a≉c) would make this comparator intransitive. Gaps are small
+    // multiples of integer counts over 6 to 8 rounds, so their separations
+    // come in two populations and nothing sits between them: across 400k
+    // generated round sets the smallest separation the app treats as real was
+    // 0.018, and the largest it treats as a tie — two categories arithmetically
+    // level, disagreeing in the last bits — was 4.4e-16. TIE sits in a band
+    // thirteen orders wide. Group the runs explicitly if a fifth category or a
+    // coarser TIE changes that.
     .sort((a, b) =>
       Math.abs(a.gap - b.gap) < TIE
         ? PRIORITY.indexOf(a.key) - PRIORITY.indexOf(b.key)
@@ -313,18 +344,20 @@ export function buildPlan(rounds: RoundSummary[]): PlanResult {
     threePuttsPer9: "three putts",
   };
 
-  // A category can be as far from target as the last one that got a slot and
-  // still miss out, because the plan only boosts two. PRIORITY decides which,
-  // and it is a claim about golfers in general, never about this user — so the
-  // payload says the only thing their own numbers support: nothing in them
-  // separates these categories. It must not dress the ordering up as a finding
-  // about them, or as more settled than it is. Name
-  // every category in the tie including
-  // the ones that won it — when three are level, both slots were arbitrary,
-  // and disclosing only the loser leaves the winners reading as earned.
+  // A category can cost as much as the last one that got a slot and still miss
+  // out, because the plan only boosts two. PRIORITY decides which, and it is a
+  // claim about golfers in general, never about this user — so the payload says
+  // the only thing their own numbers support: nothing in them separates these
+  // categories. It must not dress the ordering up as a finding about them, or
+  // as more settled than it is. Name every category in the tie including the
+  // ones that won it — when three are level, both slots were arbitrary, and
+  // disclosing only the loser leaves the winners reading as earned.
   // Tied means indistinguishable, not bit-identical: the same six numbers
   // added in a different order differ in the last bit, and a user equally bad
   // at two things is not served by that deciding which one gets practised.
+  // The copy says "cost", never "distance from target": since #40 the two are
+  // different quantities, and a user reading their own card would find 1.5
+  // doubles tying 2.0 three putts and conclude the app cannot read a number.
   const cut = worst[worst.length - 1];
   const tiedGroup = deficits.filter((d) => Math.abs(d.gap - cut.gap) < TIE);
   const leftOut = tiedGroup.filter((d) => !worst.includes(d));
@@ -353,8 +386,8 @@ export function buildPlan(rounds: RoundSummary[]): PlanResult {
         slots: b.slots + 1,
         reason:
           worst.length === 1
-            ? `Your ${names} are the furthest from target`
-            : `Your ${names} are among the furthest from target`,
+            ? `Your ${names} are costing you the most`
+            : `Your ${names} are among the most costly`,
       };
     }
     // The tie's losers keep their baseline slots, but "Baseline allocation"
@@ -363,7 +396,7 @@ export function buildPlan(rounds: RoundSummary[]): PlanResult {
     if (level.length) {
       return {
         ...b,
-        reason: `Baseline allocation — ${listNames(level)} are level with ${listNames(tiedWinners)}, which got the extra time this week`,
+        reason: `Baseline allocation — ${listNames(level)} cost about as much as ${listNames(tiedWinners)}, which got the extra time this week`,
       };
     }
     return b;
@@ -374,17 +407,23 @@ export function buildPlan(rounds: RoundSummary[]): PlanResult {
     personalized: true,
     rationale: `Built from your last ${recent.length} rounds. ${
       worst.length > 1
-        ? `Your ${LABELS[worst[0].key]} and your ${LABELS[worst[1].key]} are among the furthest from target`
-        : `Your ${LABELS[worst[0].key]} are the furthest from target`
+        ? `Your ${LABELS[worst[0].key]} and your ${LABELS[worst[1].key]} are among the most costly`
+        : `Your ${LABELS[worst[0].key]} are costing you the most`
     }, so the blocks that address them got an extra slot this week.`,
     caveats: [
       ...(leftOut.length
         ? [
-            `${listNames(tiedGroup).replace(/^y/, "Y")} are the same distance from target, to within a rounding error. Nothing in your numbers separates them, so it gave the extra time to ${listNames(
+            `${listNames(tiedGroup).replace(/^y/, "Y")} cost about the same, to within a rounding error. Nothing separates them, so it gave the extra time to ${listNames(
               tiedWinners,
             )} on a general ordering of what usually costs a mid-handicap most, not on anything in your game.`,
           ]
         : []),
+      // #40: the ranking is in strokes, not in raw counts, so the biggest
+      // number on the card is not always the one that won. Without this the
+      // plan reads as a claim about the counts themselves, and a user who
+      // checks finds 1.5 doubles beating 2.0 three putts with nothing
+      // explaining it.
+      "Categories are ranked by what they cost, not by which number is biggest — a double is worth about two three putts, a penalty stroke about one, and a green missed about three quarters of one. The largest number on your card is not always the one that got the extra time.",
       "Nine-hole samples are small. One blow-up hole can move a category for weeks.",
       "This reweights practice time. It cannot tell you whether a category moved because you improved or because the course was easier.",
     ],
