@@ -210,6 +210,26 @@ export const BLOCKS: Block[] = [
   },
 ];
 
+/**
+ * Two categories can sit exactly as far from target as each other — every
+ * target here is 1.0, so equal averages give bit-identical gaps. Something has
+ * to break that, and until #35 it was the order the four lines below happen to
+ * be written in. This is the order docs/BENCHMARKS.md puts them in instead:
+ * approach is the largest category of lost strokes at every handicap, cutting
+ * doubles is the fastest available scoring gain, penalties matter mainly
+ * because they cause doubles, and putting is the smallest of the four. It only
+ * ever separates categories the user's own numbers cannot.
+ */
+const PRIORITY: (keyof typeof TARGETS)[] = [
+  "girPer9",
+  "doublesPer9",
+  "penaltiesPer9",
+  "threePuttsPer9",
+];
+
+/** Gaps closer than this are the same number wearing different rounding. */
+const TIE = 1e-9;
+
 /** Which blocks each on-course weakness points at. */
 const REMEDIES: Record<keyof typeof TARGETS, BlockId[]> = {
   girPer9: ["strike", "wedge"],
@@ -251,7 +271,15 @@ export function buildPlan(rounds: RoundSummary[]): PlanResult {
     { key: "threePuttsPer9", gap: (avg("threePuttsPer9") - TARGETS.threePuttsPer9) / TARGETS.threePuttsPer9 },
   ] as Deficit[])
     .filter((d) => d.gap > 0.15)
-    .sort((a, b) => b.gap - a.gap);
+    // ponytail: the epsilon check is pairwise, so three gaps straddling TIE
+    // (a≈b, b≈c, a≉c) would make this comparator intransitive. Four categories
+    // whose gaps are ratios of small integers never land there; group the runs
+    // explicitly if a fifth category or a coarser TIE ever changes that.
+    .sort((a, b) =>
+      Math.abs(a.gap - b.gap) < TIE
+        ? PRIORITY.indexOf(a.key) - PRIORITY.indexOf(b.key)
+        : b.gap - a.gap,
+    );
 
   if (!deficits.length) {
     return {
@@ -276,10 +304,10 @@ export function buildPlan(rounds: RoundSummary[]): PlanResult {
   };
 
   // A category can be as far from target as the last one that got a slot and
-  // still miss out, because slice(0, 2) has to break the tie somehow (#35).
-  // Say so without naming the mechanism — a tie the last bit disagrees about
-  // is broken by the float, not by declaration order, so the payload says
-  // only what is true either way: nothing in the numbers separates them. Name
+  // still miss out, because the plan only boosts two. PRIORITY decides which,
+  // and that is a claim about golf in general, never about this user — so the
+  // payload still says the only thing their own numbers support: nothing in
+  // them separates these categories. Name
   // every category in the tie including
   // the ones that won it — when three are level, both slots were arbitrary,
   // and disclosing only the loser leaves the winners reading as earned.
@@ -287,7 +315,7 @@ export function buildPlan(rounds: RoundSummary[]): PlanResult {
   // added in a different order differ in the last bit, and a user equally bad
   // at two things is not served by that deciding which one gets practised.
   const cut = worst[worst.length - 1];
-  const tiedGroup = deficits.filter((d) => Math.abs(d.gap - cut.gap) < 1e-9);
+  const tiedGroup = deficits.filter((d) => Math.abs(d.gap - cut.gap) < TIE);
   const leftOut = tiedGroup.filter((d) => !worst.includes(d));
   // Only the tied winners, not every boosted category: worst[0] can be miles
   // clear of the tie, and saying the loser is level with it would be the same
@@ -304,8 +332,7 @@ export function buildPlan(rounds: RoundSummary[]): PlanResult {
       // claimable: gaps are float averages, so two categories the user is
       // equally bad at differ in the last bit as often as they compare equal,
       // and sort() then orders them by the declaration order of `deficits`.
-      // Name the categories, claim no ordering between them. (That the plan
-      // boosts only two when a third is equally far is #35, not a copy fix.)
+      // Name the categories, claim no ordering between them.
       const causes = worst.filter((d) => REMEDIES[d.key].includes(b.block.id));
       // " and your " not " and ": "your doubles or worse and penalty strokes"
       // garden-paths on the first label.
@@ -342,9 +369,9 @@ export function buildPlan(rounds: RoundSummary[]): PlanResult {
     caveats: [
       ...(leftOut.length
         ? [
-            `${listNames(tiedGroup).replace(/^y/, "Y")} are the same distance from target, to within a rounding error. The plan boosts two categories, so it gave the extra time to ${listNames(
+            `${listNames(tiedGroup).replace(/^y/, "Y")} are the same distance from target, to within a rounding error. Nothing in your numbers separates them, so the plan broke the tie on published strokes gained research and gave the extra time to ${listNames(
               tiedWinners,
-            )} — nothing in these numbers separates them.`,
+            )}.`,
           ]
         : []),
       "Nine-hole samples are small. One blow-up hole can move a category for weeks.",

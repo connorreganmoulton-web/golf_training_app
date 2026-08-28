@@ -56,7 +56,7 @@ describe("no superlative comes from the sort order", () => {
   const level = (name: string, winners: string) =>
     `Baseline allocation — your ${name} are level with ${winners}, which got the extra time this week`;
   const tie = (all: string, picked: string) =>
-    `${all} are the same distance from target, to within a rounding error. The plan boosts two categories, so it gave the extra time to ${picked} — nothing in these numbers separates them.`;
+    `${all} are the same distance from target, to within a rounding error. Nothing in your numbers separates them, so the plan broke the tie on published strokes gained research and gave the extra time to ${picked}.`;
 
   it("ranks neither side of a tie for first", () => {
     expect(payload(rounds({ penaltiesPer9: 2, threePuttsPer9: 2 }))).toEqual([
@@ -74,8 +74,8 @@ describe("no superlative comes from the sort order", () => {
   });
 
   it("names the category that ties its way out, and the block it lost to", () => {
-    // doubles and three putts are level at 1.0; slice(0, 2) keeps doubles on
-    // declaration order alone (#35), so three putts must not read as unflagged
+    // doubles and three putts are level at 1.0; doubles keeps the slot on
+    // strokes gained (#35), so three putts must not read as unflagged
     expect(payload(rounds({ penaltiesPer9: 3, doublesPer9: 2, threePuttsPer9: 2 }))).toEqual([
       `${built} Your penalty strokes and your doubles or worse ${boosted}`,
       "debrief x1: Baseline allocation",
@@ -91,41 +91,41 @@ describe("no superlative comes from the sort order", () => {
     ]);
   });
 
-  const W4 = "your greens hit and your penalty strokes";
+  const W4 = "your greens hit and your doubles or worse";
 
   it("owns up to both picks when the whole top of the list is level", () => {
     // all four categories at gap 0.25: neither boost was earned over the other
     expect(payload(rounds({ girPer9: 2.625, penaltiesPer9: 1.25, doublesPer9: 1.25, threePuttsPer9: 1.25 }))).toEqual([
-      `${built} Your greens hit and your penalty strokes ${boosted}`,
+      `${built} Your greens hit and your doubles or worse ${boosted}`,
       "debrief x1: Baseline allocation",
       "wedge x3: Your greens hit are among the furthest from target",
-      "driver x2: Your penalty strokes are among the furthest from target",
+      `driver x1: ${level("penalty strokes", W4)}`,
       "strike x3: Your greens hit are among the furthest from target",
-      `lowpoint x2: ${level("doubles or worse", W4)}`,
-      "sim x2: Your penalty strokes are among the furthest from target",
+      "lowpoint x3: Your doubles or worse are among the furthest from target",
+      "sim x2: Your doubles or worse are among the furthest from target",
       `sink x3: ${level("three putts", W4)}`,
       `lag x2: ${level("three putts", W4)}`,
       tie(
-        "Your greens hit, your penalty strokes, your doubles or worse and your three putts",
-        "your greens hit and your penalty strokes",
+        "Your greens hit, your doubles or worse, your penalty strokes and your three putts",
+        W4,
       ),
       ...STANDARD,
     ]);
   });
 
   it("owns up to both picks when three are level and two win", () => {
-    const W3 = "your penalty strokes and your doubles or worse";
+    const W3 = "your doubles or worse and your penalty strokes";
     expect(payload(rounds({ penaltiesPer9: 2, doublesPer9: 2, threePuttsPer9: 2 }))).toEqual([
-      `${built} Your penalty strokes and your doubles or worse ${boosted}`,
+      `${built} Your doubles or worse and your penalty strokes ${boosted}`,
       "debrief x1: Baseline allocation",
       "wedge x2: Baseline allocation",
       "driver x2: Your penalty strokes are among the furthest from target",
       "strike x2: Baseline allocation",
       "lowpoint x3: Your doubles or worse are among the furthest from target",
-      "sim x2: Your penalty strokes and your doubles or worse are among the furthest from target",
+      "sim x2: Your doubles or worse and your penalty strokes are among the furthest from target",
       `sink x3: ${level("three putts", W3)}`,
       `lag x2: ${level("three putts", W3)}`,
-      tie("Your penalty strokes, your doubles or worse and your three putts", W3),
+      tie("Your doubles or worse, your penalty strokes and your three putts", W3),
       ...STANDARD,
     ]);
   });
@@ -139,9 +139,9 @@ describe("no superlative comes from the sort order", () => {
       penaltiesPer9: [2, 2, 2, 2, 1, 1][i],
     }));
     expect(payload(near)).toContain(
-      tie("Your penalty strokes and your greens hit", "your penalty strokes"),
+      tie("Your greens hit and your penalty strokes", "your greens hit"),
     );
-    expect(payload(near)).toContain(`wedge x2: ${level("greens hit", "your penalty strokes")}`);
+    expect(payload(near)).toContain(`driver x1: ${level("penalty strokes", "your greens hit")}`);
   });
 
   it("says nothing about a tie when a third deficit is genuinely behind", () => {
@@ -177,5 +177,56 @@ describe("no superlative comes from the sort order", () => {
       "lag x3: Your three putts are among the furthest from target",
       ...STANDARD,
     ]);
+  });
+});
+
+describe("a tie is broken by strokes gained, not by declaration order", () => {
+  // #35: `deficits` is declared gir, penalties, doubles, three putts, and a
+  // stable sort left that literal deciding who got a slot when gaps were
+  // equal. The fallback is now docs/BENCHMARKS.md — approach, then doubles,
+  // then penalties, then putting — so every case here is one where the two
+  // orders disagree.
+  const boostedIds = (rs: RoundSummary[]) =>
+    buildPlan(rs)
+      .blocks.filter((b) => b.reason.includes("furthest from target"))
+      .map((b) => b.block.id);
+
+  it("gives the contested slot to doubles over penalties", () => {
+    // gir 0.571 clear of both; penalties and doubles level at 0.4, so exactly
+    // one slot is contested. Declaration order picks penalties (driver);
+    // strokes gained picks doubles (lowpoint).
+    const r = rounds({ girPer9: 1.5, penaltiesPer9: 1.4, doublesPer9: 1.4 });
+    expect(boostedIds(r)).toEqual(["wedge", "strike", "lowpoint", "sim"]);
+  });
+
+  it("gives the contested slot to approach over penalties", () => {
+    // greens hit and penalties are 1 ulp apart — arithmetically the same
+    // distance from target. Declaration order happens to hand it to penalties.
+    const near: RoundSummary[] = [2, 2, 1, 1, 1, 0].map((g, i) => ({
+      scorePer9: 45, girPer9: g, doublesPer9: 3, threePuttsPer9: 1,
+      penaltiesPer9: [2, 2, 2, 2, 1, 1][i],
+    }));
+    expect(boostedIds(near)).toEqual(["wedge", "strike", "lowpoint", "sim"]);
+  });
+
+  it("names the winner first when the whole tie is boosted", () => {
+    // the issue's own case: penalties, doubles and three putts all 1.0 over.
+    expect(buildPlan(rounds({ penaltiesPer9: 2, doublesPer9: 2, threePuttsPer9: 2 })).rationale).toContain(
+      "Your doubles or worse and your penalty strokes are among the furthest from target",
+    );
+  });
+
+  it("never lets priority outrank a real gap", () => {
+    // penalties 2.0, doubles 1.0. Doubles outranks penalties on strokes
+    // gained and must still lose to the bigger number.
+    expect(buildPlan(rounds({ penaltiesPer9: 3, doublesPer9: 2 })).rationale).toContain(
+      "Your penalty strokes and your doubles or worse are among the furthest from target",
+    );
+  });
+
+  it("says what broke the tie when a category loses one", () => {
+    expect(buildPlan(rounds({ penaltiesPer9: 3, doublesPer9: 2, threePuttsPer9: 2 })).caveats).toContain(
+      "Your doubles or worse and your three putts are the same distance from target, to within a rounding error. Nothing in your numbers separates them, so the plan broke the tie on published strokes gained research and gave the extra time to your doubles or worse.",
+    );
   });
 });

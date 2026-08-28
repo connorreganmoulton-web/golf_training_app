@@ -38,6 +38,15 @@ rather than holing long ones.
 defensive tee shots that leave long approaches cost more than missed fairways.
 The plan only advises leaving driver in the bag where a miss carries a penalty.
 
+## Breaking a tie between categories
+
+Every target above except greens hit is 1.0, so two categories the player is
+equally bad at produce identical gaps and the plan has to pick between them on
+something. It uses the ordering these findings imply — approach, then doubles,
+then penalties, then putting — and says in the UI that it did. That ordering is
+a statement about golfers in general and never about the player in front of it,
+which is why the tie itself is still disclosed.
+
 ## A caveat the UI must preserve
 
 **The practice-variability research is contested.** Random and variable practice
