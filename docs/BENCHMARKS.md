@@ -41,11 +41,21 @@ The plan only advises leaving driver in the bag where a miss carries a penalty.
 ## Breaking a tie between categories
 
 Every target above except greens hit is 1.0, so two categories the player is
-equally bad at produce identical gaps and the plan has to pick between them on
-something. It uses the ordering these findings imply — approach, then doubles,
-then penalties, then putting — and says in the UI that it did. That ordering is
-a statement about golfers in general and never about the player in front of it,
-which is why the tie itself is still disclosed.
+equally bad at produce identical gaps, and the plan has to pick between them on
+something. It uses this order: approach, doubles, penalties, putting.
+
+Only the ends of that list come from the numbers above. Approach first is the
+6-versus-1.4-strokes finding; putting last is the same finding read from the
+other end. **Doubles above penalties is a judgement call and should be recorded
+as one.** The research quantifies four strokes for cutting doubles and puts no
+figure on penalties, so the quantified lever goes first. Read the causal claim
+the other way — penalties are the leading cause of doubles, so fixing penalties
+is fixing doubles upstream — and the pair swaps. Nothing here settles it.
+
+Because of that, the UI says the tie was broken on a general ordering of what
+usually costs a mid-handicap most. It does not cite this file as research
+proving the pick, and it still discloses the tie, because the ordering is a
+statement about golfers in general and never about the player in front of it.
 
 ## A caveat the UI must preserve
 

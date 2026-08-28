@@ -56,7 +56,7 @@ describe("no superlative comes from the sort order", () => {
   const level = (name: string, winners: string) =>
     `Baseline allocation — your ${name} are level with ${winners}, which got the extra time this week`;
   const tie = (all: string, picked: string) =>
-    `${all} are the same distance from target, to within a rounding error. Nothing in your numbers separates them, so the plan broke the tie on published strokes gained research and gave the extra time to ${picked}.`;
+    `${all} are the same distance from target, to within a rounding error. Nothing in your numbers separates them, so it gave the extra time to ${picked} on a general ordering of what usually costs a mid-handicap most, not on anything in your game.`;
 
   it("ranks neither side of a tie for first", () => {
     expect(payload(rounds({ penaltiesPer9: 2, threePuttsPer9: 2 }))).toEqual([
@@ -224,9 +224,13 @@ describe("a tie is broken by strokes gained, not by declaration order", () => {
     );
   });
 
-  it("says what broke the tie when a category loses one", () => {
-    expect(buildPlan(rounds({ penaltiesPer9: 3, doublesPer9: 2, threePuttsPer9: 2 })).caveats).toContain(
-      "Your doubles or worse and your three putts are the same distance from target, to within a rounding error. Nothing in your numbers separates them, so the plan broke the tie on published strokes gained research and gave the extra time to your doubles or worse.",
+  it("says what broke the tie without dressing it up as a finding about the user", () => {
+    // The ordering is a claim about golfers in general and the copy has to say
+    // so. Citing research here would be the same invented authority #4 removed.
+    const caveats = buildPlan(rounds({ penaltiesPer9: 3, doublesPer9: 2, threePuttsPer9: 2 })).caveats;
+    expect(caveats).toContain(
+      "Your doubles or worse and your three putts are the same distance from target, to within a rounding error. Nothing in your numbers separates them, so it gave the extra time to your doubles or worse on a general ordering of what usually costs a mid-handicap most, not on anything in your game.",
     );
+    expect(caveats.join(" ")).not.toMatch(/research|study|studies|proven/i);
   });
 });

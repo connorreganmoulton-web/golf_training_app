@@ -214,11 +214,18 @@ export const BLOCKS: Block[] = [
  * Two categories can sit exactly as far from target as each other — every
  * target here is 1.0, so equal averages give bit-identical gaps. Something has
  * to break that, and until #35 it was the order the four lines below happen to
- * be written in. This is the order docs/BENCHMARKS.md puts them in instead:
- * approach is the largest category of lost strokes at every handicap, cutting
- * doubles is the fastest available scoring gain, penalties matter mainly
- * because they cause doubles, and putting is the smallest of the four. It only
- * ever separates categories the user's own numbers cannot.
+ * be written in. Deliberate order, written down where it can be argued with:
+ *
+ *   Approach first and putting last are what docs/BENCHMARKS.md measures —
+ *   roughly 6 strokes of separation on approach against about 1.4 on putting.
+ *   Doubles above penalties is a judgement call, not a finding. The research
+ *   quantifies four strokes for cutting doubles and puts no number on
+ *   penalties, so the quantified lever goes first; read the causal claim the
+ *   other way (penalties cause doubles, so fix the cause) and you would swap
+ *   this pair. Both readings are defensible, which is why the caveat the user
+ *   sees claims a general ordering and not a research result.
+ *
+ * It only ever separates categories the user's own numbers cannot.
  */
 const PRIORITY: (keyof typeof TARGETS)[] = [
   "girPer9",
@@ -272,9 +279,12 @@ export function buildPlan(rounds: RoundSummary[]): PlanResult {
   ] as Deficit[])
     .filter((d) => d.gap > 0.15)
     // ponytail: the epsilon check is pairwise, so three gaps straddling TIE
-    // (a≈b, b≈c, a≉c) would make this comparator intransitive. Four categories
-    // whose gaps are ratios of small integers never land there; group the runs
-    // explicitly if a fifth category or a coarser TIE ever changes that.
+    // (a≈b, b≈c, a≉c) would make this comparator intransitive. Gaps are ratios
+    // of integer counts over 6 to 8 rounds: across 400k generated round sets
+    // the smallest non-zero separation between two categories was 0.0089, seven
+    // orders of magnitude clear of TIE, and nothing landed in the band at all.
+    // Group the runs explicitly if a fifth category or a coarser TIE changes
+    // that.
     .sort((a, b) =>
       Math.abs(a.gap - b.gap) < TIE
         ? PRIORITY.indexOf(a.key) - PRIORITY.indexOf(b.key)
@@ -305,9 +315,10 @@ export function buildPlan(rounds: RoundSummary[]): PlanResult {
 
   // A category can be as far from target as the last one that got a slot and
   // still miss out, because the plan only boosts two. PRIORITY decides which,
-  // and that is a claim about golf in general, never about this user — so the
-  // payload still says the only thing their own numbers support: nothing in
-  // them separates these categories. Name
+  // and it is a claim about golfers in general, never about this user — so the
+  // payload says the only thing their own numbers support: nothing in them
+  // separates these categories. It must not dress the ordering up as a finding
+  // about them, or as more settled than it is. Name
   // every category in the tie including
   // the ones that won it — when three are level, both slots were arbitrary,
   // and disclosing only the loser leaves the winners reading as earned.
@@ -369,9 +380,9 @@ export function buildPlan(rounds: RoundSummary[]): PlanResult {
     caveats: [
       ...(leftOut.length
         ? [
-            `${listNames(tiedGroup).replace(/^y/, "Y")} are the same distance from target, to within a rounding error. Nothing in your numbers separates them, so the plan broke the tie on published strokes gained research and gave the extra time to ${listNames(
+            `${listNames(tiedGroup).replace(/^y/, "Y")} are the same distance from target, to within a rounding error. Nothing in your numbers separates them, so it gave the extra time to ${listNames(
               tiedWinners,
-            )}.`,
+            )} on a general ordering of what usually costs a mid-handicap most, not on anything in your game.`,
           ]
         : []),
       "Nine-hole samples are small. One blow-up hole can move a category for weeks.",
